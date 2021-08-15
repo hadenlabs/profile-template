@@ -19,29 +19,31 @@ jobs:
     runs-on: ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     container:
-      image: golang:1.15
+      image: golang:1.16
     steps:
       - name: Check out a copy of the repo
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
 
-      - name: show tag
-        id: tag
-        run: |
-          echo ::set-output name=TAG::${GITHUB_REF##*/}
+      - id: get_version
+        uses: battila7/get-version-action@v2
 
-      - name: install
+      -  name: set vars to github
+         run: |
+          echo "APP_TAG=${{ steps.get_version.outputs.version-without-v }}" >> $GITHUB_ENV
+
+      - name: install git-chglog
         run: |
           go get github.com/git-chglog/git-chglog/cmd/git-chglog
 
       - name: generate changelog
         run: |
           # https://github.com/git-chglog/git-chglog#git-chglog
-          $(go env GOPATH)/bin/git-chglog \
-            -c .chglog/config.yml \
-            -o RELEASE_CHANGELOG.md \
-            ${{ steps.tag.outputs.TAG }}
+          git-chglog \
+            ${{ env.APP_TAG }} \
+            --config .chglog/config.yml \
+            --output RELEASE_CHANGELOG.md
 
       - name: Create Release
         id: create_release
@@ -49,8 +51,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
-          tag_name: ${{ steps.tag.outputs.TAG }}
-          release_name: ${{ steps.tag.outputs.TAG }}
-          draft: true
+          tag_name: ${{ env.APP_TAG }}
+          release_name: ${{ env.APP_TAG }}
+          draft: false
           prerelease: false
           body_path: RELEASE_CHANGELOG.md
